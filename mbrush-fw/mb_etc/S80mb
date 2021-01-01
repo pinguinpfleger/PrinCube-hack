@@ -1,0 +1,97 @@
+#! /bin/sh
+#
+
+echo "MB: $0 $1"
+[ "$1" != "start" ] && exit
+
+cd /root
+echo "MB: enter /root"
+
+mv /dev/random /dev/random_bk
+ln -sf /dev/urandom /dev/random
+sync
+
+if [ -f mb_conf/reset ] || [ ! -f mb_conf/wifi.conf ]; then
+    echo "MB: reset wifi config"
+    rm -rf mb_conf/reset
+    state="$(cat /sys/mb/state)"
+    short="${state:4:8}"
+    echo "ssid=PrinCube-$short&passwd=12345678&freq=2462" > mb_conf/wifi.conf
+    sync
+fi
+
+echo "MB: cgi source"
+source mb_ser/cgi-bin/cgi_lib
+echo "MB: cgi_init"
+
+function wifi_reset()
+{
+    rm -f mb_conf/wifi.conf
+    sync
+    [ ! -z "$1" ] && echo "MB: wifi_reset: $1"
+    sleep 4
+    reboot
+    exit
+}
+
+wifi_conf="$(cat mb_conf/wifi.conf)"
+[ $? -ne 0 ] && wifi_reset "read wifi.conf error"
+[ -z "$wifi_conf" ] && wifi_reset "wifi.conf empty"
+cgi_init "$wifi_conf" || wifi_reset "parse wifi.conf error, val: $wifi_conf"
+
+echo "MB: get ssid"
+ssid="$(echo -n "$cgi_ssid" | tr -d "\n" | od -A n -t x1 | tr -d " " | tr -d "\n")"
+
+function get_psk() {
+    psk_str="$(wpa_passphrase "$cgi_ssid" "$cgi_passwd")" || wifi_reset "get psk_str error"
+    echo "$psk_str" | while read -r line; do
+        if [ "${line:0:4}" == "psk=" ]; then
+            echo "${line:4}"
+            break
+        fi
+    done
+}
+
+echo "MB: get psk"
+psk="$(get_psk)"
+[ -z "$psk" ] && wifi_reset "psk empty"
+
+# client or host mode
+if [ -f mb_conf/wifi_client ]; then
+    echo "MB: wpa client mode up"
+    wpa_supplicant -B -i wlan0 -c mb_etc/wpa_client.conf
+    echo "MB: udhcpc wlan0 up"
+    busybox udhcpc -i wlan0
+else 
+    echo "MB: prepare wpa_tpl.conf"
+    echo "$(cat mb_etc/wpa_tpl.conf)" | sed -e "s/_SSID_/$ssid/g" -e "s/_PSK_/$psk/g" -e "s/_FREQ_/$cgi_freq/g" > /tmp/wpa_temp.conf
+    echo "MB: ifconfig wlan0 192.168.44.1"
+    ifconfig wlan0 192.168.44.1
+    echo "MB: wpa accespoint up"
+    wpa_supplicant -B -i wlan0 -c /tmp/wpa_temp.conf
+    echo "MB: udhcpd wlan0 up"
+    busybox udhcpd mb_etc/udhcpd_wlan0.conf
+fi
+
+
+
+echo "MB: ifconfig usb0 192.168.88.1 up"
+ifconfig usb0 192.168.88.1 up
+
+echo "MB: httpd up"
+busybox httpd -h mb_ser -c httpd.conf # -f -p 80 -vvv
+echo "MB: ssl up"
+stunnel mb_etc/stunnel.conf
+
+echo "MB: udhcpd usb0 up"
+busybox udhcpd mb_etc/udhcpd_usb0.conf
+
+echo "MB: ipv6 usb0 up"
+ip addr add "fd88::1/64" dev usb0
+echo "MB: ipv6 wlan0 up"
+ip addr add "fd44::1/64" dev wlan0
+radvd -C mb_etc/radvd.conf # -d5 -n
+
+echo 4 > /proc/sysrq-trigger
+echo "MB: done"
+
