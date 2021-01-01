@@ -37,12 +37,20 @@ touch /root/mb_conf/wifi_client && reboot
 ```
 
 ## TODO:
-security!!! user roles (admin and user)
-ntpdate 
-wifi ap fallback when wpa client mode fails
-wifi config webinterface
-dropbear?
-webui improvments
-...
+security!!! user roles (admin and user)  
+ntpdate  
+wifi ap fallback when wpa client mode fails  
+wifi config webinterface    
+dropbear?  
+webui improvments   
+...   
+  
+Contributions are welcome :-) 
+ 
+## usefull Links 
 
-Contributions are welcome :-)
+https://blog.d-l.io/mb-faq 
+
+## compatible cartriges 
+
+https://github.com/dukelec/mb/issues/12 
