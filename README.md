@@ -19,7 +19,7 @@ and add a html webshell with root rights under /shell.html
 
 1. Download this FW Mod
 2. Edit mb_etc/wpa_client.conf to your needs
-3. create firmware tar file
+3. create firmware tar file (on Windows use 7-zip, built-in tar does not set execute bit on run.sh correct)
 ```
 tar cf princube-fw-mod0.1.tar mbrush-fw/
 ```
